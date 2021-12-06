@@ -19,7 +19,7 @@ std::string darknetFilePath_ = DARKNET_FILE_PATH;
 #endif
 
 namespace darknet_ros {
-
+//static int lcx_cnt = 0;
 char* cfg;
 char* weights;
 char* data;
@@ -178,21 +178,21 @@ void YoloObjectDetector::cameraCallback(const sensor_msgs::ImageConstPtr& msg) {
     ROS_ERROR("cv_bridge exception: %s", e.what());
     return;
   }
-
+  cv::resize(cam_image->image, cam_image->image, cv::Size(),0.5,0.5); //!试着改变一下图像分辨率
   if (cam_image) {
     {
       boost::unique_lock<boost::shared_mutex> lockImageCallback(mutexImageCallback_);
       imageHeader_ = msg->header;
-      cv::Mat tmp_img = cam_image->image.clone();
-      cv::resize(tmp_img, camImageCopy_, cv::Size(),0.5,0.5);//我长宽都变为原来的0.5倍
-      //camImageCopy_ = cam_image->image.clone();
+      //cv::Mat tmp_img = cam_image->image.clone();
+      //cv::resize(tmp_img, camImageCopy_, cv::Size(),0.5,0.5);//我长宽都变为原来的0.5倍
+      camImageCopy_ = cam_image->image.clone();
     }
     {
       boost::unique_lock<boost::shared_mutex> lockImageStatus(mutexImageStatus_);
       imageStatus_ = true;
     }
-    frameWidth_ = cam_image->image.size().width/2;
-    frameHeight_ = cam_image->image.size().height/2;
+    frameWidth_ = cam_image->image.size().width;
+    frameHeight_ = cam_image->image.size().height;
   }
   return;
 }
@@ -211,13 +211,13 @@ void YoloObjectDetector::checkForObjectsActionGoalCB() {
     ROS_ERROR("cv_bridge exception: %s", e.what());
     return;
   }
-
+  cv::resize(cam_image->image, cam_image->image, cv::Size(),0.5,0.5);//!试着改变一下图像分辨率
   if (cam_image) {
     {
       boost::unique_lock<boost::shared_mutex> lockImageCallback(mutexImageCallback_);
-      cv::Mat tmp_img = cam_image->image.clone();
-      cv::resize(tmp_img, camImageCopy_, cv::Size(),0.5,0.5);//我长宽都变为原来的0.5倍
-      //camImageCopy_ = cam_image->image.clone();
+      //cv::Mat tmp_img = cam_image->image.clone();
+      //cv::resize(tmp_img, camImageCopy_, cv::Size(),0.5,0.5);//我长宽都变为原来的0.5倍
+      camImageCopy_ = cam_image->image.clone();
     }
     {
       boost::unique_lock<boost::shared_mutex> lockImageCallback(mutexActionStatus_);
@@ -227,8 +227,8 @@ void YoloObjectDetector::checkForObjectsActionGoalCB() {
       boost::unique_lock<boost::shared_mutex> lockImageStatus(mutexImageStatus_);
       imageStatus_ = true;
     }
-    frameWidth_ = cam_image->image.size().width/2;
-    frameHeight_ = cam_image->image.size().height/2;
+    frameWidth_ = cam_image->image.size().width;
+    frameHeight_ = cam_image->image.size().height;
   }
   return;
 }
@@ -426,6 +426,7 @@ void* YoloObjectDetector::detectLoop(void* ptr) {
   }
 }
 
+//setupNetwork(cfg, weights, data, thresh, detectionNames, numClasses_, 0, 0, 1, 0.5, 0, 0, 0, 0);
 void YoloObjectDetector::setupNetwork(char* cfgfile, char* weightfile, char* datafile, float thresh, char** names, int classes, int delay,
                                       char* prefix, int avg_frames, float hier, int w, int h, int frames, int fullscreen) {
   demoPrefix_ = prefix;
@@ -491,7 +492,8 @@ void YoloObjectDetector::yolo() {
       cv::setWindowProperty("YOLO", cv::WND_PROP_FULLSCREEN, cv::WINDOW_FULLSCREEN);
     } else {
       cv::moveWindow("YOLO", 0, 0);
-      cv::resizeWindow("YOLO", 640, 480);
+      //cv::resizeWindow("YOLO", 640, 480);
+      cv::resizeWindow("YOLO", frameWidth_, frameHeight_); //换了一下显示情况
     }
   }
 
@@ -501,10 +503,10 @@ void YoloObjectDetector::yolo() {
     buffIndex_ = (buffIndex_ + 1) % 3;
     fetch_thread = std::thread(&YoloObjectDetector::fetchInThread, this);
     detect_thread = std::thread(&YoloObjectDetector::detectInThread, this);
-    if (!demoPrefix_) {
+    if (!demoPrefix_) { //demoPrefix_ 传入参数为0，基本上一定成立
       fps_ = 1. / (what_time_is_it_now() - demoTime_);
       demoTime_ = what_time_is_it_now();
-      if (viewImage_) {
+      if (viewImage_) { // viewImage_ 默认为true
         displayInThread(0);
       } else {
         generate_image(buff_[(buffIndex_ + 1) % 3], disp_);
@@ -563,7 +565,6 @@ void* YoloObjectDetector::publishInThread() {
     msg.header.frame_id = "detection";
     msg.count = num;
     objectPublisher_.publish(msg);
-
     for (int i = 0; i < numClasses_; i++) {
       if (rosBoxCounter_[i] > 0) {
         darknet_ros_msgs::BoundingBox boundingBox;
@@ -582,9 +583,12 @@ void* YoloObjectDetector::publishInThread() {
           boundingBox.xmax = xmax;
           boundingBox.ymax = ymax;
           boundingBoxesResults_.bounding_boxes.push_back(boundingBox);
+          cv::rectangle(cvImage, cv::Point(xmin, ymin), cv::Point(xmax, ymax), cv::Scalar(0, 0, 255), 2);
         }
       }
     }
+    //if(lcx_cnt == 0) cv::imwrite("/home/lcx/output/test.png", cvImage);
+    //lcx_cnt++;
     boundingBoxesResults_.header.stamp = ros::Time::now();
     boundingBoxesResults_.header.frame_id = "detection";
     boundingBoxesResults_.image_header = headerBuff_[(buffIndex_ + 1) % 3];
