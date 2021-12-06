@@ -183,14 +183,16 @@ void YoloObjectDetector::cameraCallback(const sensor_msgs::ImageConstPtr& msg) {
     {
       boost::unique_lock<boost::shared_mutex> lockImageCallback(mutexImageCallback_);
       imageHeader_ = msg->header;
-      camImageCopy_ = cam_image->image.clone();
+      cv::Mat tmp_img = cam_image->image.clone();
+      cv::resize(tmp_img, camImageCopy_, cv::Size(),0.5,0.5);//我长宽都变为原来的0.5倍
+      //camImageCopy_ = cam_image->image.clone();
     }
     {
       boost::unique_lock<boost::shared_mutex> lockImageStatus(mutexImageStatus_);
       imageStatus_ = true;
     }
-    frameWidth_ = cam_image->image.size().width;
-    frameHeight_ = cam_image->image.size().height;
+    frameWidth_ = cam_image->image.size().width/2;
+    frameHeight_ = cam_image->image.size().height/2;
   }
   return;
 }
@@ -213,7 +215,9 @@ void YoloObjectDetector::checkForObjectsActionGoalCB() {
   if (cam_image) {
     {
       boost::unique_lock<boost::shared_mutex> lockImageCallback(mutexImageCallback_);
-      camImageCopy_ = cam_image->image.clone();
+      cv::Mat tmp_img = cam_image->image.clone();
+      cv::resize(tmp_img, camImageCopy_, cv::Size(),0.5,0.5);//我长宽都变为原来的0.5倍
+      //camImageCopy_ = cam_image->image.clone();
     }
     {
       boost::unique_lock<boost::shared_mutex> lockImageCallback(mutexActionStatus_);
@@ -223,8 +227,8 @@ void YoloObjectDetector::checkForObjectsActionGoalCB() {
       boost::unique_lock<boost::shared_mutex> lockImageStatus(mutexImageStatus_);
       imageStatus_ = true;
     }
-    frameWidth_ = cam_image->image.size().width;
-    frameHeight_ = cam_image->image.size().height;
+    frameWidth_ = cam_image->image.size().width/2;
+    frameHeight_ = cam_image->image.size().height/2;
   }
   return;
 }
